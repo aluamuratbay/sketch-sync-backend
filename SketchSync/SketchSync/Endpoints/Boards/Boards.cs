@@ -2,6 +2,7 @@ using SketchSync.Database.Repositories.Users;
 using SketchSync.Database.Repositories.Boards;
 using SketchSync.Endpoints.Boards.Contracts;
 using SketchSync.Entities;
+using SketchSync.Enums;
 using SketchSync.Exceptions;
 using SketchSync.Extensions;
 
@@ -131,7 +132,7 @@ public class Boards() : BaseModule(nameof(Boards))
                 return Results.Created();
             });
 
-        group.MapPatch("member", async (CreateMemberRequest request, IUserRepository userRepository, IBoardRepository boardRepository, HttpContext httpContext) =>
+        group.MapPost("member", async (CreateMemberRequest request, IUserRepository userRepository, IBoardRepository boardRepository, HttpContext httpContext) =>
             {
                 var userId = httpContext.GetUserId();
             
@@ -143,7 +144,7 @@ public class Boards() : BaseModule(nameof(Boards))
                 var user = await userRepository.GetByEmailAsync(request.Email);
                 
                 if (user is null)
-                    throw new NotFoundException($"User with email  {request.Email} not found");
+                    throw new NotFoundException($"User with email {request.Email} not found");
 
                 if (userId == user.Id)
                     throw new BadRequestException($"User with email {request.Email} already exists");
@@ -163,6 +164,28 @@ public class Boards() : BaseModule(nameof(Boards))
                 return Results.NoContent();
             });
         
+        group.MapPut("member", async (UpdateMemberRequest request, IUserRepository userRepository, IBoardRepository boardRepository, HttpContext httpContext) =>
+        {
+            var userId = httpContext.GetUserId();
+            
+            if (userId == request.UserId)
+                throw new BadRequestException($"User with email {request.UserId} already exists");
+            
+            var board = await boardRepository.GetAsync(request.BoardId);
+    
+            if (board.OwnerId != userId) 
+                throw new ForbiddenException($"Forbidden resource for the user with the ID: {userId}");
+            
+            var member = board.Members.FirstOrDefault(m => m.UserId == request.UserId);
+            
+            if (member is null) 
+                throw new BadRequestException($"User with ID {request.UserId} is not a member");
+            
+            member.Role = request.Role;
+            await boardRepository.UpdateAsync(board);
+            return Results.NoContent();
+        });
+        
         group.MapDelete("{boardId:guid}", async (Guid boardId, IBoardRepository boardRepository, HttpContext httpContext) =>
             {
                 var userId = httpContext.GetUserId();
@@ -178,9 +201,14 @@ public class Boards() : BaseModule(nameof(Boards))
             {
                 var userId = httpContext.GetUserId();
                 var board = await boardRepository.GetAsync(boardId);
-                if (board.OwnerId != userId) 
-                    throw new ForbiddenException($"Forbidden resource for the user with the ID: {userId}");
-        
+
+                if (board.OwnerId != userId)
+                {
+                    var member = board.Members.FirstOrDefault(m => m.UserId == userId);
+                    if (member is null || member.Role == RoleEnum.Viewer)
+                        throw new ForbiddenException($"Forbidden resource for the user with the ID: {userId}");
+                }
+
                 var updatedBoard = request.MapToBoard(board);
                 await boardRepository.UpdateAsync(updatedBoard);
                 return Results.NoContent();

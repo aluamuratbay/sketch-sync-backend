@@ -45,7 +45,7 @@ public class ExceptionMiddleware(RequestDelegate next, ILogger<ExceptionMiddlewa
     {
         return exception switch
         {
-            BadHttpRequestException badHttpRequestException => new ExceptionDetails(
+            BadRequestException badHttpRequestException => new ExceptionDetails(
                 StatusCodes.Status400BadRequest,
                 "BadRequest",
                 "Bad Request",
