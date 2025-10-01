@@ -63,11 +63,10 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
 
         app.UseHttpsRedirection();
 
+        app.UseCors();
         app.UseAuthentication();
         app.UseAuthorization();
 
         app.UseMiddleware<ExceptionMiddleware>();
-
-        app.UseCors();
     }
 }
